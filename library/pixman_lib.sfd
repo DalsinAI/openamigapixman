@@ -1,0 +1,35 @@
+==id $Id: pixman_lib.sfd 0.1 (7.10.2026) $
+* "pixman.library"
+==base _PixmanBase
+==basetype struct Library *
+==libname pixman.library
+==bias 30
+==public
+==include <exec/types.h>
+==include <libraries/pixman.h>
+ULONG PX_Version()()
+CONST_STRPTR PX_VersionString()()
+struct pixman_image *PX_ImageCreateBits(struct PXCreateBits *req)(a0)
+struct pixman_image *PX_ImageCreateSolid(const pixman_color_t *color)(a0)
+struct pixman_image *PX_ImageRef(struct pixman_image *image)(a0)
+BOOL PX_ImageUnref(struct pixman_image *image)(a0)
+BOOL PX_ImageSetTransform(struct pixman_image *image, const pixman_transform_t *transform)(a0,a1)
+VOID PX_ImageSetRepeat(struct pixman_image *image, ULONG repeat)(a0,d0)
+BOOL PX_ImageSetFilter(struct PXFilter *req)(a0)
+VOID PX_ImageSetComponentAlpha(struct pixman_image *image, ULONG value)(a0,d0)
+uint32_t *PX_ImageGetData(struct pixman_image *image)(a0)
+LONG PX_ImageGetWidth(struct pixman_image *image)(a0)
+LONG PX_ImageGetHeight(struct pixman_image *image)(a0)
+LONG PX_ImageGetStride(struct pixman_image *image)(a0)
+ULONG PX_ImageGetFormat(struct pixman_image *image)(a0)
+VOID PX_Composite32(struct PXComposite32 *req)(a0)
+BOOL PX_Fill(struct PXFill *req)(a0)
+BOOL PX_Blt(struct PXBlt *req)(a0)
+BOOL PX_ImageFillRectangles(struct PXFillRects *req)(a0)
+VOID PX_Region32Init(pixman_region32_t *region)(a0)
+VOID PX_Region32InitRect(pixman_region32_t *region, LONG x, LONG y, ULONG width, ULONG height)(a0,d0,d1,d2,d3)
+VOID PX_Region32Fini(pixman_region32_t *region)(a0)
+BOOL PX_Region32Copy(pixman_region32_t *dest, const pixman_region32_t *src)(a0,a1)
+BOOL PX_Region32Intersect(pixman_region32_t *dest, const pixman_region32_t *a, const pixman_region32_t *b)(a0,a1,a2)
+BOOL PX_Region32Union(pixman_region32_t *dest, const pixman_region32_t *a, const pixman_region32_t *b)(a0,a1,a2)
+==end
