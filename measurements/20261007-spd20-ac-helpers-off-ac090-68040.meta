@@ -1,0 +1,8 @@
+library_sha256=f3608febc4c16eda45f4b88f3b40718bdee3516cc6192fae803344b2f2db8c70
+harness_sha256=8d4676ace063c526ed681d98d9e8b6a3985156cf6991e437e5f2797d399b5288
+runtime=ac090-native
+cpu_profile=68040
+cpu_pace_hz=0
+ac_helpers=0
+amigachrome_guest=7168cbd6052f
+runs=4 boots (off, on, off, on), 2 runs a boot
