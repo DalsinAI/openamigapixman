@@ -1,0 +1,68 @@
+# boot2-v1-run1
+HARNESS id=openamigapixman-b0 version=1 pixman=0.46.4 target=68040+FPU size=640x480
+CHECK fill PASS
+CHECK blt PASS
+CHECK composite_src PASS
+CHECK composite_over PASS
+CHECK mask_over PASS
+CHECK rects PASS
+CHECK final_hash=a766e705 mask_hash=2fbe3ea7 result=PASS
+BENCH name=fill32 loops=2048 us_x100=9167 mpix_s_x1000=3351149 mib_s_x1000=12783619 hash=38d99dc5
+BENCH name=blt32 loops=1024 us_x100=22271 mpix_s_x1000=1379342 mib_s_x1000=10523545 hash=9b3d5dc5
+BENCH name=src32 loops=4096 us_x100=8091 mpix_s_x1000=3796915 mib_s_x1000=28968162 hash=9b3d5dc5
+BENCH name=over32 loops=1 us_x100=106304810 mpix_s_x1000=289 mib_s_x1000=3307 hash=f8d79dc5
+BENCH name=mask_a8_over32 loops=1 us_x100=51934016 mpix_s_x1000=592 mib_s_x1000=5077 hash=42cad07d
+BENCH name=fillrects24 loops=2048 us_x100=15054 mpix_s_x1000=508887 mib_s_x1000=1941251 hash=a0c28ea0
+BROWSER name=paint640x480 loops=1 us_x100=59886041 frames_s_x1000=1670 touched_mpix_s_x1000=1204 hash=504efbc7
+HARNESS PASS
+# boot2-v1-run2
+HARNESS id=openamigapixman-b0 version=1 pixman=0.46.4 target=68040+FPU size=640x480
+CHECK fill PASS
+CHECK blt PASS
+CHECK composite_src PASS
+CHECK composite_over PASS
+CHECK mask_over PASS
+CHECK rects PASS
+CHECK final_hash=a766e705 mask_hash=2fbe3ea7 result=PASS
+BENCH name=fill32 loops=2048 us_x100=9196 mpix_s_x1000=3340589 mib_s_x1000=12743335 hash=38d99dc5
+BENCH name=blt32 loops=1024 us_x100=22008 mpix_s_x1000=1395882 mib_s_x1000=10649737 hash=9b3d5dc5
+BENCH name=src32 loops=4096 us_x100=9079 mpix_s_x1000=3383773 mib_s_x1000=25816136 hash=9b3d5dc5
+BENCH name=over32 loops=1 us_x100=105067108 mpix_s_x1000=292 mib_s_x1000=3346 hash=f8d79dc5
+BENCH name=mask_a8_over32 loops=1 us_x100=59538977 mpix_s_x1000=516 mib_s_x1000=4429 hash=42cad07d
+BENCH name=fillrects24 loops=2048 us_x100=12117 mpix_s_x1000=632224 mib_s_x1000=2411744 hash=a0c28ea0
+BROWSER name=paint640x480 loops=1 us_x100=61502666 frames_s_x1000=1626 touched_mpix_s_x1000=1173 hash=504efbc7
+HARNESS PASS
+# boot4-v1-run1
+HARNESS id=openamigapixman-b0 version=1 pixman=0.46.4 target=68040+FPU size=640x480
+CHECK fill PASS
+CHECK blt PASS
+CHECK composite_src PASS
+CHECK composite_over PASS
+CHECK mask_over PASS
+CHECK rects PASS
+CHECK final_hash=a766e705 mask_hash=2fbe3ea7 result=PASS
+BENCH name=fill32 loops=4096 us_x100=8874 mpix_s_x1000=3461643 mib_s_x1000=13205119 hash=38d99dc5
+BENCH name=blt32 loops=1024 us_x100=21416 mpix_s_x1000=1434439 mib_s_x1000=10943899 hash=9b3d5dc5
+BENCH name=src32 loops=4096 us_x100=8077 mpix_s_x1000=3803386 mib_s_x1000=29017536 hash=9b3d5dc5
+BENCH name=over32 loops=1 us_x100=104588802 mpix_s_x1000=294 mib_s_x1000=3361 hash=f8d79dc5
+BENCH name=mask_a8_over32 loops=1 us_x100=56823362 mpix_s_x1000=541 mib_s_x1000=4640 hash=42cad07d
+BENCH name=fillrects24 loops=2048 us_x100=12481 mpix_s_x1000=613794 mib_s_x1000=2341437 hash=a0c28ea0
+BROWSER name=paint640x480 loops=1 us_x100=61361134 frames_s_x1000=1630 touched_mpix_s_x1000=1175 hash=504efbc7
+HARNESS PASS
+# boot4-v1-run2
+HARNESS id=openamigapixman-b0 version=1 pixman=0.46.4 target=68040+FPU size=640x480
+CHECK fill PASS
+CHECK blt PASS
+CHECK composite_src PASS
+CHECK composite_over PASS
+CHECK mask_over PASS
+CHECK rects PASS
+CHECK final_hash=a766e705 mask_hash=2fbe3ea7 result=PASS
+BENCH name=fill32 loops=2048 us_x100=9198 mpix_s_x1000=3340014 mib_s_x1000=12741142 hash=38d99dc5
+BENCH name=blt32 loops=1024 us_x100=21686 mpix_s_x1000=1416582 mib_s_x1000=10807663 hash=9b3d5dc5
+BENCH name=src32 loops=4096 us_x100=8021 mpix_s_x1000=3829922 mib_s_x1000=29219983 hash=9b3d5dc5
+BENCH name=over32 loops=1 us_x100=104580767 mpix_s_x1000=294 mib_s_x1000=3362 hash=f8d79dc5
+BENCH name=mask_a8_over32 loops=1 us_x100=65684211 mpix_s_x1000=468 mib_s_x1000=4014 hash=42cad07d
+BENCH name=fillrects24 loops=2048 us_x100=12486 mpix_s_x1000=613547 mib_s_x1000=2340494 hash=a0c28ea0
+BROWSER name=paint640x480 loops=1 us_x100=60082128 frames_s_x1000=1664 touched_mpix_s_x1000=1200 hash=504efbc7
+HARNESS PASS
