@@ -9,6 +9,9 @@
 #include <exec/memory.h>
 #include <proto/exec.h>
 #include <stddef.h>
+#ifdef PX_AC_HELPERS
+#include "ac_helpers.h"     /* AC090's native helpers (build-static.sh, AC_HELPERS=1) */
+#endif
 
 extern struct ExecBase *SysBase;
 
@@ -45,7 +48,12 @@ void *calloc(size_t n, size_t size)
     total = n * size;
     p = (UBYTE *)malloc(total);
     if (!p) return NULL;
+#ifdef PX_AC_HELPERS
+    ac_memset_auto(p, 0, total);
+    (void)i;
+#else
     for (i = 0; i < total; ++i) p[i] = 0;
+#endif
     return p;
 }
 
@@ -62,7 +70,12 @@ void *realloc(void *p, size_t n)
     if (!q) return NULL;
     src = (UBYTE *)p;
     copy = oldn < n ? oldn : n;
+#ifdef PX_AC_HELPERS
+    ac_memcpy_auto(q, src, copy);
+    (void)i;
+#else
     for (i = 0; i < copy; ++i) q[i] = src[i];
+#endif
     free(p);
     return q;
 }
@@ -73,6 +86,19 @@ void *memcpy(void *dst, const void *src, size_t n)
     const UBYTE *s = (const UBYTE *)src;
     size_t i;
     for (i = 0; i < n; ++i) d[i] = s[i];
+    return dst;
+}
+
+/* The front doors (ac_helpers.h) hand memmoves under 64 bytes to the C
+ * library's: this one, so the library needs nothing of libnix's. Never built
+ * on the front doors themselves (achelpers/ac_string.h is not forced here). */
+void *memmove(void *dst, const void *src, size_t n)
+{
+    UBYTE *d = (UBYTE *)dst;
+    const UBYTE *s = (const UBYTE *)src;
+    size_t i;
+    if (d > s && d < s + n) { for (i = n; i != 0; --i) d[i - 1] = s[i - 1]; }
+    else { for (i = 0; i < n; ++i) d[i] = s[i]; }
     return dst;
 }
 
