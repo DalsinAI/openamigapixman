@@ -1,0 +1,16 @@
+HARNESS id=openamigapixman-b0 version=1 pixman=0.46.4 target=68040+FPU size=640x480
+CHECK fill PASS
+CHECK blt PASS
+CHECK composite_src PASS
+CHECK composite_over PASS
+CHECK mask_over PASS
+CHECK rects PASS
+CHECK final_hash=a766e705 mask_hash=2fbe3ea7 result=PASS
+BENCH name=fill32 loops=2048 us_x100=9326 mpix_s_x1000=3294014 mib_s_x1000=12565667 hash=38d99dc5
+BENCH name=blt32 loops=1024 us_x100=25097 mpix_s_x1000=1224048 mib_s_x1000=9338747 hash=9b3d5dc5
+BENCH name=src32 loops=2048 us_x100=10093 mpix_s_x1000=3043754 mib_s_x1000=23222004 hash=9b3d5dc5
+BENCH name=over32 loops=1 us_x100=115432935 mpix_s_x1000=266 mib_s_x1000=3046 hash=f8d79dc5
+BENCH name=mask_a8_over32 loops=1 us_x100=57002674 mpix_s_x1000=539 mib_s_x1000=4626 hash=42cad07d
+BENCH name=fillrects24 loops=2048 us_x100=12266 mpix_s_x1000=624533 mib_s_x1000=2382403 hash=a0c28ea0
+BROWSER name=paint640x480 loops=1 us_x100=63336665 frames_s_x1000=1579 touched_mpix_s_x1000=1139 hash=504efbc7
+HARNESS PASS

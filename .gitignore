@@ -1,0 +1,5 @@
+out/
+work/
+tarballs/*.tar.gz
+*.log
+config/pixman/pixman-version.h
