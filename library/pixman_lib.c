@@ -16,6 +16,9 @@
 #include <proto/exec.h>
 
 #include "../include/libraries/pixman.h"
+#ifdef PX_AC_HELPERS
+#include "ac_helpers.h"
+#endif
 
 #define REG(r, decl) register decl __asm(#r)
 #define LIB_VERSION 1
@@ -289,12 +292,16 @@ static BOOL PX_Fill(REG(a0, struct PXFill *r), REG(a6, struct PixmanLibBase *bas
 
 static void px_copy_overlap(UBYTE *dst, const UBYTE *src, ULONG n)
 {
+#ifdef PX_AC_HELPERS
+    ac_memmove_auto(dst, src, n);    /* a row: AC090's native memmove from 64 bytes, the 68040 C body elsewhere (SPD-20) */
+#else
     ULONG i;
     if (dst > src && dst < src + n) {
         for (i = n; i != 0; --i) dst[i - 1] = src[i - 1];
     } else {
         for (i = 0; i < n; ++i) dst[i] = src[i];
     }
+#endif
 }
 
 static BOOL px_blt_portable(struct PXBlt *r)
