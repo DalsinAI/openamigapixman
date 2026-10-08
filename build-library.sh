@@ -24,7 +24,7 @@ if [ -f "$OUT/lib/ac_helpers.on" ]; then
 fi
 
 # shellcheck disable=SC2086
-"$CC" -m68040 -m68881 -mcrt=nix20 -O2 -fomit-frame-pointer -fno-toplevel-reorder \
+"$CC" -m68040 -m68881 -mcrt=nix20 -O2 -fno-delete-null-pointer-checks -fomit-frame-pointer -fno-toplevel-reorder \
   -fno-builtin -Wall -Wextra -Werror -Wno-unused-parameter $ACDEF \
   -nostartfiles -I"$HERE/include" -I"$OUT/include" -I"$OUT/include/pixman-1" \
   -o "$OUT/lib/pixman.library" "$HERE/library/pixman_lib.c" "$HERE/library/pixman_runtime.c" \
