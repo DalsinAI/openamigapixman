@@ -8,7 +8,7 @@ P="$STOVE/prefix"
 CC=${CC:-"$P/bin/m68k-amigaos-gcc"}
 AR=${AR:-"$P/bin/m68k-amigaos-ar"}
 CPU=${CPU:-"-m68040 -m68881 -mcrt=nix20"}
-CFLAGS="${CFLAGS:-"-O2"} $CPU -D_DEFAULT_SOURCE=1 -DPIXMAN_NO_TLS=1 -DNDEBUG -fno-common -Wall -Wextra -Wno-unused-parameter"
+CFLAGS="${CFLAGS:-"-O2"} $CPU -fno-delete-null-pointer-checks -D_DEFAULT_SOURCE=1 -DPIXMAN_NO_TLS=1 -DNDEBUG -fno-common -Wall -Wextra -Wno-unused-parameter"
 TARBALL="$HERE/tarballs/pixman-0.46.4.tar.gz"
 WORK="$HERE/work/pixman-0.46.4"
 OUT=${OUT:-"$HERE/out"}
@@ -32,7 +32,7 @@ ACH="$HERE/work/achelpers"
 ACFLAGS=
 rm -f "$OUT/lib/ac_helpers.on"
 if [ "$AC_HELPERS" = 1 ]; then
-  CC="$CC" AR="$AR" CFLAGS="${CFLAGS_HELPERS:-"-O2 $CPU"}" sh "$HERE/achelpers/achelpers.sh" "$ACH"
+  CC="$CC" AR="$AR" CFLAGS="${CFLAGS_HELPERS:-"-O2 $CPU -fno-delete-null-pointer-checks"}" sh "$HERE/achelpers/achelpers.sh" "$ACH"
   ACFLAGS="-I$ACH/src -include $HERE/achelpers/ac_string.h"
 fi
 
