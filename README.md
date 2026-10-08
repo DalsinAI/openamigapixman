@@ -26,7 +26,7 @@ The project keeps upstream Pixman semantics as the correctness reference while e
 
 ## AC090's native helpers (SPD-20)
 
-`AC_HELPERS=1` routes copies and fills through amigachrome-guest's `common/amiga/ac_helpers`, as openamigaimage's build does. These are magic functions: AmigaChrome's AC090 runs them as host code, and a real Amiga runs them as 68k code written for the 68020 and 68040. `AC_HELPERS=0` builds as before. The default, `auto`, turns them on when the commit in `AMIGACHROME_GUEST_PINNED_COMMIT` is to hand, from `../amigachrome-guest`, `../guest` or `AMIGACHROME_GUEST`, and says which.
+`AC_HELPERS=1` routes copies and fills through amigachrome-guest's `common/amiga/ac_helpers`, as openamigaimage's build does. These are magic functions: AmigaChrome's AC090 runs them as x86 or ARM64 code, and a real Amiga runs them as 68k code written for the 68020 and 68040. `AC_HELPERS=0` builds as before. The default, `auto`, turns them on when the commit in `AMIGACHROME_GUEST_PINNED_COMMIT` is to hand, from `../amigachrome-guest`, `../guest` or `AMIGACHROME_GUEST`, and says which.
 
 What goes through them:
 - **Upstream Pixman's own calls:** `achelpers/ac_string.h` is forced into every compile, so `memcpy`, `memmove` and `memset` calls of 64 bytes or more go to the tagged functions. Smaller ones stay GCC's own code, or `pixman_runtime.c`'s.
