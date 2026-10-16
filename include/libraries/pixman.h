@@ -1,4 +1,4 @@
-/* Copyright (c) 2026 Dalsin Limited.
+/* Copyright (c) 2026 AmigaChrome Team.
  * Amiga pixman.library ABI. Upstream Pixman keeps its own MIT licence. */
 #ifndef LIBRARIES_PIXMAN_H
 #define LIBRARIES_PIXMAN_H

@@ -1,4 +1,4 @@
-/* Copyright (c) 2026 Dalsin Limited. */
+/* Copyright (c) 2026 AmigaChrome Team. */
 #ifndef PROTO_PIXMAN_H
 #define PROTO_PIXMAN_H
 #include <exec/types.h>
