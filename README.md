@@ -51,4 +51,4 @@ The first measurements show that simple fill/copy paths are already cheap relati
 
 ## Licensing
 
-OpenAmigaPixman glue, library ABI and test code are MIT licensed by Dalsin Limited. Upstream Pixman retains its own MIT licence and copyright notices.
+OpenAmigaPixman glue, library ABI and test code are MIT licensed by the AmigaChrome Team. Upstream Pixman retains its own MIT licence and copyright notices.

@@ -1,4 +1,4 @@
-/* Copyright (c) 2026 Dalsin Limited.
+/* Copyright (c) 2026 AmigaChrome Team.
  * pixman.library 1.0 for AmigaOS 3.x.
  * Upstream Pixman 0.46.4 remains MIT licensed by its authors.
  *
@@ -36,7 +36,7 @@ int start(void) { return -1; }
 
 static const char lib_name[] = PIXMANLIB_NAME;
 static const char lib_id[] =
-    "pixman.library 1.0 (7.10.2026) Pixman 0.46.4, OpenAmiga port, Dalsin Limited\r\n";
+    "pixman.library 1.0 (7.10.2026) Pixman 0.46.4, OpenAmiga port, AmigaChrome Team\r\n";
 
 static struct Library *lib_init(REG(d0, struct PixmanLibBase *base),
                                 REG(a0, BPTR seglist),
