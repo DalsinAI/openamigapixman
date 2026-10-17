@@ -156,3 +156,42 @@ PixBench and PixmanTest still use the FPU for their timing arithmetic, as before
 - **Composites.** They are slower until COMPOSITE_PD runs on the host (gap 10): today they run on opengpu.library's 68k back end, which loses to upstream Pixman's 68k code by 1.4 to 3.4 times.
 - **COPY.** Through the host it is slower than on the 68k for Fast RAM images. That is OpenGPU's host path, and it belongs with gaps 10 and 11.
 - **Size.** The library is 16 KB, against 1.0's 403 KB.
+
+## 9. COMPOSITE_PD on the host (17 October 2026, later)
+
+Gap 10 is being closed by three pull requests:
+
+- **amigachrome:** the runtime's core repinned to stream v1.4 and built with `OGPU_HOST`. It copies rows with memmove, and does the image OVER and the solid-through-A8 OVER on whole pixels, with the same bytes.
+- **amigachrome-guest:** ACRTG.gpu takes COMPOSITE_PD from a minor-4 runtime.
+- **openamigartg:** the host paths in the core.
+
+That runtime has not been deployed yet. Lab t4-g-px ran it as a build of that branch (`lab_instance.py --binary`). The figures are PixBench, 640×480, medians of three, µs a call, with each 2.0 run alternating with a 1.0 run on the deployed runtime. The host was heavily loaded (load average 33 to 39 on 12 threads), so single runs vary by up to 8 times.
+
+| PixBench | 1.0 | 2.0, COMPOSITE_PD on the host |
+| --- | --- | --- |
+| fill32 | 210 | 81 |
+| blt32 | 331 | 562 |
+| src32 | 369 | 108 |
+| over32 | 9003 | 2672 |
+| mask_a8_over32 | 9953 | 2660 |
+| fillrects24 | 409 | 104 |
+| browser paint | 23842 | 5313 |
+
+## 10. The gaps in the order WebKit on OpenGPU needs them
+
+cairo is leaving the design, so WebKit will draw on OpenGPU directly. Its order differs from cairo's: a1 masks, SATURATE and the disjoint and conjoint operators were cairo's needs, and they drop to the end.
+
+1. **Scaled images:** a premultiplied affine COMPOSITE_PD with bilinear filtering and PAD at the edges. Every `<img>` and background drawn at another size, and every page at a device-pixel ratio other than 1, needs it. This is gaps 4 and 5.
+2. **Anti-aliased path coverage:** an A8 mask rasteriser for paths, for rounded-rect borders and clips, SVG and canvas fills and strokes. This is gap 9, edges first. Glyphs come later, from the font engine.
+3. **Linear and radial gradients:** CSS gradients, and canvas gradients (with conical). This is gap 8, with PAD.
+4. **Text:** glyph runs as one batch of MASK or COMPOSITE_PD commands; component-alpha masks for subpixel text. This is gaps 6 and 9.
+5. **Blur:** separable convolution for box-shadow, text-shadow and `filter: blur()`. This is gap 4's filters, on its own.
+6. **Projective transforms:** CSS 3D transforms, gap 4's other half.
+7. **The PDF blend modes:** `mix-blend-mode` and canvas `globalCompositeOperation`. This is gap 3.
+8. **Byte orders:** RGBA and ABGR, as image decoders and canvas ImageData hand them over (gap 7's a8b8g8r8 and r8g8b8a8). PIXELS can convert them on the way in.
+9. **Last, or not at all:** REFLECT, SATURATE, disjoint and conjoint, a1 and a4, 24-bit and the other formats.
+
+**On the host's side, beside these:**
+- COMPOSITE_PD on the GPU, in `ogpu_vk.c`, for large or scaled composites once the cost model says the GPU wins;
+- Fast RAM reach (gap 11), so composites into a page's backing store can run there.
+
