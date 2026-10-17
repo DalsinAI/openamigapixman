@@ -1,5 +1,7 @@
 # OpenAmigaPixman Browser Acceleration Design
 
+> **17 October 2026:** pixman.library 2.0 is a thin layer over OpenGPU. It has no upstream Pixman inside, and no 68040+FPU, AC090 or AC_MAGIC backend of its own. Read `DESIGN.md` for the call map, the gaps and the stages. This page is kept as the record of why Pixman matters to the browser; its backend plan below is replaced by `DESIGN.md`.
+
 ## Purpose
 
 OpenAmigaPixman is not primarily a word-processor dependency. Its strategic role in AmigaChrome is to become a fast, stable 2D compositing layer underneath the HTML5 browser graphics stack.
