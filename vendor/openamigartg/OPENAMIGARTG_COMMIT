@@ -1,0 +1,8 @@
+6179a1a13783d414379b27f98f6ce0aac6125531
+# Copied from DalsinAI/openamigartg, branch pixman/passthrough-20261017 (OpenGPU stream v1.4, COMPOSITE_PD),
+# unchanged. Repin to main once that branch is merged.
+#   include/opengpu/stream.h build.h opengpu.h, include/inline/opengpu.h   the stream, the builder, the calls
+#   library/opengpu/ogpu_build.c                                         built into pixman.library (writes batches)
+#   library/opengpu/ogpu_core.c ogpu_core.h                              tests only (tests/run.sh): OpenGPU's core,
+#                                                                         run beside upstream Pixman; never in the library
+#   LICENSE                                                              openamigartg's (MIT)

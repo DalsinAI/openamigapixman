@@ -1,0 +1,81 @@
+# round 1
+PIXMANLIB 4604 upstream=0.46.4
+COMPOSITE sum=646df2c5 first=ff336699
+REGION union=1
+PASS pixman.library
+pixman.library 2.0 (17/10/26)
+Pixman 0.46.4's interface over OpenGPU, AmigaChrome Team
+opengpu.library 0.16 (15/10/26)
+OpenGPU, AmigaChrome Team
+ACRTG.gpu
+HARNESS id=openamigapixman-b0 version=1 pixman=0.46.4 target=68040+FPU size=640x480
+CHECK fill PASS
+CHECK blt PASS
+CHECK composite_src PASS
+CHECK composite_over PASS
+CHECK mask_over PASS
+CHECK rects PASS
+CHECK final_hash=a766e705 mask_hash=2fbe3ea7 result=PASS
+BENCH name=fill32 loops=1024 us_x100=6841 mpix_s_x1000=4490509 mib_s_x1000=17129931 hash=38d99dc5
+BENCH name=blt32 loops=128 us_x100=111978 mpix_s_x1000=274339 mib_s_x1000=2093037 hash=9b3d5dc5
+BENCH name=src32 loops=256 us_x100=161442 mpix_s_x1000=190285 mib_s_x1000=1451761 hash=9b3d5dc5
+BENCH name=over32 loops=16 us_x100=1487093 mpix_s_x1000=20658 mib_s_x1000=236409 hash=04958dc5
+BENCH name=mask_a8_over32 loops=16 us_x100=2194455 mpix_s_x1000=13999 mib_s_x1000=120154 hash=92486108
+BENCH name=fillrects24 loops=4096 us_x100=3194 mpix_s_x1000=2398352 mib_s_x1000=9148987 hash=b6acd03f
+BROWSER name=paint640x480 loops=32 us_x100=1475948 frames_s_x1000=67753 touched_mpix_s_x1000=48861 hash=504efbc7
+HARNESS PASS
+
+# round 2
+PIXMANLIB 4604 upstream=0.46.4
+COMPOSITE sum=646df2c5 first=ff336699
+REGION union=1
+PASS pixman.library
+pixman.library 2.0 (17/10/26)
+Pixman 0.46.4's interface over OpenGPU, AmigaChrome Team
+opengpu.library 0.16 (15/10/26)
+OpenGPU, AmigaChrome Team
+ACRTG.gpu
+HARNESS id=openamigapixman-b0 version=1 pixman=0.46.4 target=68040+FPU size=640x480
+CHECK fill PASS
+CHECK blt PASS
+CHECK composite_src PASS
+CHECK composite_over PASS
+CHECK mask_over PASS
+CHECK rects PASS
+CHECK final_hash=a766e705 mask_hash=2fbe3ea7 result=PASS
+BENCH name=fill32 loops=2048 us_x100=9424 mpix_s_x1000=3259801 mib_s_x1000=12435156 hash=38d99dc5
+BENCH name=blt32 loops=256 us_x100=338996 mpix_s_x1000=90621 mib_s_x1000=691380 hash=9b3d5dc5
+BENCH name=src32 loops=32 us_x100=415993 mpix_s_x1000=73847 mib_s_x1000=563411 hash=9b3d5dc5
+BENCH name=over32 loops=8 us_x100=2707403 mpix_s_x1000=11347 mib_s_x1000=129852 hash=04958dc5
+BENCH name=mask_a8_over32 loops=16 us_x100=3237726 mpix_s_x1000=9488 mib_s_x1000=81437 hash=92486108
+BENCH name=fillrects24 loops=2048 us_x100=15481 mpix_s_x1000=494863 mib_s_x1000=1887754 hash=b6acd03f
+BROWSER name=paint640x480 loops=4 us_x100=6966551 frames_s_x1000=14354 touched_mpix_s_x1000=10352 hash=504efbc7
+HARNESS PASS
+
+# round 3
+PIXMANLIB 4604 upstream=0.46.4
+COMPOSITE sum=646df2c5 first=ff336699
+REGION union=1
+PASS pixman.library
+pixman.library 2.0 (17/10/26)
+Pixman 0.46.4's interface over OpenGPU, AmigaChrome Team
+opengpu.library 0.16 (15/10/26)
+OpenGPU, AmigaChrome Team
+ACRTG.gpu
+HARNESS id=openamigapixman-b0 version=1 pixman=0.46.4 target=68040+FPU size=640x480
+CHECK fill PASS
+CHECK blt PASS
+CHECK composite_src PASS
+CHECK composite_over PASS
+CHECK mask_over PASS
+CHECK rects PASS
+CHECK final_hash=a766e705 mask_hash=2fbe3ea7 result=PASS
+BENCH name=fill32 loops=4096 us_x100=5864 mpix_s_x1000=5239124 mib_s_x1000=19985674 hash=38d99dc5
+BENCH name=blt32 loops=128 us_x100=94335 mpix_s_x1000=325647 mib_s_x1000=2484487 hash=9b3d5dc5
+BENCH name=src32 loops=128 us_x100=141391 mpix_s_x1000=217269 mib_s_x1000=1657634 hash=9b3d5dc5
+BENCH name=over32 loops=16 us_x100=1367728 mpix_s_x1000=22461 mib_s_x1000=257041 hash=04958dc5
+BENCH name=mask_a8_over32 loops=16 us_x100=1880862 mpix_s_x1000=16333 mib_s_x1000=140187 hash=92486108
+BENCH name=fillrects24 loops=4096 us_x100=4352 mpix_s_x1000=1760217 mib_s_x1000=6714693 hash=b6acd03f
+BROWSER name=paint640x480 loops=16 us_x100=1484485 frames_s_x1000=67363 touched_mpix_s_x1000=48580 hash=504efbc7
+HARNESS PASS
+

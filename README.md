@@ -1,56 +1,58 @@
 # OpenAmigaPixman
 
-AmigaOS 3.x packaging and acceleration boundary for upstream Pixman, targeting AmigaChrome's 68040 + FPU machine profile.
+`pixman.library` for AmigaOS 3.x gives Pixman's interface to Amiga programs. From 2.0 it is a thin layer over OpenGPU, and OpenGPU draws the pixels:
 
-The project keeps upstream Pixman semantics as the correctness reference while exposing a compact `pixman.library` ABI for Amiga software. The same ABI is intended to host progressively faster 68040, AC090/AC_MAGIC and OpenGPU implementations without pushing machine-specific acceleration into WebKit or applications.
+- on AmigaChrome, on the host, behind OpenGPU's ACRTG.gpu driver;
+- on any Amiga, in opengpu.library's own 68k back end.
+
+No upstream Pixman is inside the library. Upstream Pixman 0.46.4 is the reference that the tests compare against, pixel for pixel. `DESIGN.md` has the call map, the gaps and the stages.
 
 ## Baseline
 
-- Upstream Pixman: 0.46.4
-- Target: m68k AmigaOS 3.x
-- CPU baseline: 68040 + FPU. Hard float (`-m68040 -m68881`), like the rest of
-  the browser stack: it needs a 68040 with an FPU and does not run on an
-  LC040 or EC040.
-- Endianness: big-endian
-- TLS: disabled
-- Library version: 0.1
+- **Interface:** Pixman 0.46.4's types and calls, through the LVOs in `library/pixman_lib.sfd` (unchanged from 1.0) and the request blocks in `include/libraries/pixman.h`.
+- **Library version:** 2.0.
+- **Needs:** opengpu.library with OpenGPU stream v1.4 (COMPOSITE_PD; DalsinAI/openamigartg). Without it, `OpenLibrary("pixman.library")` fails.
+- **CPU:** 68040, soft float. The library has no floating point at all, so it also runs on an LC040 or EC040. The build fails if an FPU instruction gets in.
+- **Formats:** a8r8g8b8, x8r8g8b8, b8g8r8a8, r5g6b5, x1r5g5b5 and a8.
+- **Operators:** CLEAR to ADD.
+- **Sources:** solid colours and images, with repeat NONE or NORMAL and integer translations.
+- **Masks:** A8, ARGB32 or a solid alpha.
+- **Not yet:** the rest are refused and counted (`DESIGN.md`, "Gaps").
 
 ## Build
 
 ```sh
-./fetch-sources.sh
-./build-library.sh
-./build-test.sh
-./build-bench.sh
+./build-library.sh      # out/lib/pixman.library (about 16 KB)
+./build-test.sh         # out/tests/PixmanTest, the smoke test (tests/pixmansmoke.c)
+./build-bench.sh        # out/tests/PixBench
+tests/run.sh [CASES]    # pixman.library against upstream Pixman, on qemu-m68k
 ```
 
-`build-library.sh` builds the upstream static library and then links `out/lib/pixman.library`. Generated outputs, fetched tarballs and unpacked upstream sources are intentionally excluded from Git.
-
-## AC090's native helpers (SPD-20)
-
-`AC_HELPERS=1` routes copies and fills through amigachrome-guest's `common/amiga/ac_helpers`, as openamigaimage's build does. These are magic functions: AmigaChrome's AC090 runs them as x86 or ARM64 code, and a real Amiga runs them as 68k code written for the 68020 and 68040. `AC_HELPERS=0` builds as before. The default, `auto`, turns them on when the commit in `AMIGACHROME_GUEST_PINNED_COMMIT` is to hand, from `../amigachrome-guest`, `../guest` or `AMIGACHROME_GUEST`, and says which.
-
-What goes through them:
-- **Upstream Pixman's own calls:** `achelpers/ac_string.h` is forced into every compile, so `memcpy`, `memmove` and `memset` calls of 64 bytes or more go to the tagged functions. Smaller ones stay GCC's own code, or `pixman_runtime.c`'s.
-- **`pixman.library`'s own copies:** `pixman_blt`'s portable fallback (one `memmove` a row), `calloc` and `realloc` use the helpers too. `libachelpers.a` is linked after `libpixman-1.a`.
-- **`pixman_runtime.c`'s small functions:** its `memcpy`, `memset` and the new `memmove` stay plain byte loops. The helpers' front doors hand them everything under 64 bytes, so they are never built on the helpers themselves.
-
-The helpers and their tags pass amigachrome-guest's `tests/m68k` with GCC 16.2 (m68k-linux, qemu-m68k: 68000, 68020 and 68040 code, -O0 and -O2). `achelpers/achelpers.sh` builds them with the m68k toolchain (7 October 2026). `pixman.library` with them has not yet been built with os32-gcc16 or run on AmigaChrome.
+- **The stove.** All four use the os32-gcc16 stove (`STOVE=`).
+- **The library's only outside code** is OpenGPU's batch builder, `vendor/openamigartg/library/opengpu/ogpu_build.c`. `vendor/openamigartg/OPENAMIGARTG_COMMIT` says which openamigartg commit it comes from.
+- **The test needs** `m68k-linux-gnu-gcc` and `qemu-m68k`, and the Pixman release tarball in `tarballs/`. The test never fetches it: put it there, or run `fetch-sources.sh`.
+- **`build-static.sh`** still builds upstream Pixman for AmigaOS as `libpixman-1.a`, for comparisons. pixman.library doesn't use it.
 
 ## Tests
 
-`out/tests/PixmanTest` is the ABI smoke test. `out/tests/PixBench` is the correctness and performance harness and uses AmigaOS `timer.device` E-clock timing.
+- **`tests/run.sh`** runs `tests/pixmantest.c`. It is built for a big-endian 68040 and runs under qemu-m68k. It runs the library's core and OpenGPU's core beside upstream Pixman, on random cases:
+  - composites: every operator and format above, solid and image sources and masks, repeat, translations and clipping;
+  - fills, blits and rectangle fills;
+  - region unions, intersections and copies.
 
-The first AC090-native 68040-profile run is preserved in `measurements/20261007-b0.1-ac090-68040.txt`. It exposed an upstream limitation important to m68k: raw `pixman_blt()` has architecture-specific backends but no generic portable-C BLT implementation. `pixman.library` therefore supplies an overlap-safe portable fallback, which also gives AC090 a clean future acceleration hook.
+  The results must be pixel-exact, apart from the bits a format leaves unused, and nothing may be refused. It also checks that a scaling transform, PAD repeat, a component-alpha mask and SATURATE are refused and leave the pixels alone.
+- **PixmanTest** is the ABI smoke test on AmigaOS.
+- **PixBench** is the correctness and timing harness on AmigaOS. It uses `timer.device` E-clock timing, and its binary is unchanged from 1.0.
+- **Measurements.** `measurements/20261017-2.0-*` has 1.0 and 2.0 on AmigaChrome's AC090 (68040, OS 3.2.3), with OpenGPU's driver and without it.
 
 ## Browser
 
-See `BROWSER_ACCELERATION_DESIGN.md`. The design rule is simple:
+`BROWSER_ACCELERATION_DESIGN.md` explains why a fast 2D layer under the browser matters. cairo and WebKit link upstream Pixman statically today (openamigacairo). `DESIGN.md` section 1 lists what cairo calls, and so what pixman.library's interface still needs before cairo can use it.
 
-> WebKit describes what must be painted; OpenAmigaPixman decides the fastest correct way to paint it.
+## AC090's native helpers
 
-The first measurements show that simple fill/copy paths are already cheap relative to generic alpha composition. The highest-value optimisation targets are ARGB OVER, A8-mask OVER and glyph/text composition.
+`achelpers/` (SPD-20) belonged to 1.0. It routed Pixman's copies and fills through amigachrome-guest's AC090 magic functions. 2.0 has no copies or fills of its own: they are OpenGPU's FILL and COPY. `build-static.sh` still uses the helpers when it builds upstream Pixman.
 
 ## Licensing
 
-OpenAmigaPixman glue, library ABI and test code are MIT licensed by the AmigaChrome Team. Upstream Pixman retains its own MIT licence and copyright notices.
+OpenAmigaPixman's library, ABI and test code are MIT licensed by the AmigaChrome Team. The files in `vendor/openamigartg` keep openamigartg's MIT licence. Upstream Pixman, used by the tests and `build-static.sh` only, keeps its own MIT licence and copyright notices.
