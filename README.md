@@ -8,7 +8,9 @@ The project keeps upstream Pixman semantics as the correctness reference while e
 
 - Upstream Pixman: 0.46.4
 - Target: m68k AmigaOS 3.x
-- CPU baseline: 68040 + FPU
+- CPU baseline: 68040 + FPU. Hard float (`-m68040 -m68881`), like the rest of
+  the browser stack: it needs a 68040 with an FPU and does not run on an
+  LC040 or EC040.
 - Endianness: big-endian
 - TLS: disabled
 - Library version: 0.1
