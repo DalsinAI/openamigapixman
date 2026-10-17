@@ -1,11 +1,15 @@
-/* Copyright (c) 2026 AmigaChrome Team.
- * pixman.library 1.0 for AmigaOS 3.x.
- * Upstream Pixman 0.46.4 remains MIT licensed by its authors.
+/* Copyright (c) 2026 AmigaChrome Team. MIT licence (LICENSE).
  *
- * ABI rule: callers use request blocks for wide/hot calls. This keeps the
- * library vector ABI stable while the implementation underneath can move
- * from portable 68040+FPU C to hand-tuned 040/FPU, OpenGPU or AC090 magic paths.
- */
+ * pixman.library 2.0 for AmigaOS 3.x: Pixman's interface (the LVOs in
+ * pixman_lib.sfd, unchanged from 1.0) as a thin layer over OpenGPU
+ * (DESIGN.md). px_core.c turns each call into an OpenGPU batch; the pixels
+ * are drawn by opengpu.library: by its driver (ACRTG.gpu on AmigaChrome,
+ * where the host draws) or by its own 68k back end. There is no copy of
+ * upstream Pixman in this library, and no floating point.
+ *
+ * Built bare (no startup code or C library): the RomTag's stub comes first.
+ * It needs opengpu.library with stream v1.4 (COMPOSITE_PD); OpenLibrary
+ * of pixman.library fails without it. */
 #include <exec/types.h>
 #include <exec/resident.h>
 #include <exec/libraries.h>
@@ -16,67 +20,228 @@
 #include <proto/exec.h>
 
 #include "../include/libraries/pixman.h"
-#ifdef PX_AC_HELPERS
-#include "ac_helpers.h"
-#endif
+#include "../vendor/openamigartg/include/opengpu/opengpu.h"
+#include "px_core.h"
 
 #define REG(r, decl) register decl __asm(#r)
-#define LIB_VERSION 1
-#define LIB_REVISION 0
+#define LIB_VERSION PIXMANLIB_VERSION
+#define LIB_REVISION PIXMANLIB_REVISION
 
 struct PixmanLibBase {
     struct Library lib;
     BPTR seglist;
-    struct SignalSemaphore lock;
+    struct SignalSemaphore lock;        /* image references */
+    struct Library *gpu;                /* opengpu.library */
+    struct px_env env;
+    struct px_stats stats;
 };
 
-struct ExecBase *SysBase;
+/* exec's base from address 4, through a register (gcc 16's -Warray-bounds) */
+static inline struct ExecBase *px_sysbase(void)
+{ struct ExecBase **p = (struct ExecBase **)4; __asm__ ("" : "+r"(p)); return *p; }
+#define SysBase (px_sysbase())
 
+/* Run as a program, the library does nothing. This must stay the first
+ * code in the file (-fno-toplevel-reorder). */
 int start(void) { return -1; }
 
 static const char lib_name[] = PIXMANLIB_NAME;
 static const char lib_id[] =
-    "pixman.library 1.0 (7.10.2026) Pixman 0.46.4, OpenAmiga port, AmigaChrome Team\r\n";
+    "pixman.library 2.0 (17.10.2026) Pixman 0.46.4's interface over OpenGPU, AmigaChrome Team\r\n";
+static const char lib_ver[] __attribute__((used)) =
+    "$VER: pixman.library 2.0 (17.10.2026) Pixman 0.46.4's interface over OpenGPU, AmigaChrome Team";
 
-static struct Library *lib_init(REG(d0, struct PixmanLibBase *base),
-                                REG(a0, BPTR seglist),
-                                REG(a6, struct ExecBase *sys));
-static struct Library *lib_open(REG(a6, struct PixmanLibBase *base));
-static BPTR lib_close(REG(a6, struct PixmanLibBase *base));
+#define OpenGPUBase (base->gpu)
+#include "../vendor/openamigartg/include/inline/opengpu.h"
+
+/* ---- the core's environment ------------------------------------------------------- */
+
+static void *env_alloc(void *ctx, unsigned long bytes) { (void)ctx; return AllocVec(bytes, MEMF_ANY | MEMF_CLEAR); }
+static void env_free(void *ctx, void *p) { (void)ctx; if (p) FreeVec(p); }
+static unsigned long env_address(void *ctx, const void *p) { (void)ctx; return (unsigned long)p; }
+static long env_submit(void *ctx, const void *stream, long words)
+{
+    struct PixmanLibBase *base = ctx;
+    ULONG fence = 0;
+    LONG r = OGPU_Submit((APTR)stream, (ULONG)words, &fence);
+    if (r == OGPU_OK && fence) r = OGPU_Wait(fence);
+    return r;
+}
+
+/* ---- the library ------------------------------------------------------------------ */
+
+static struct Library *lib_init(REG(d0, struct PixmanLibBase *base), REG(a0, BPTR seglist), REG(a6, struct ExecBase *sys))
+{
+    (void)sys;
+    base->seglist = seglist;
+    base->lib.lib_Revision = LIB_REVISION;
+    InitSemaphore(&base->lock);
+    base->env.alloc = env_alloc;
+    base->env.free = env_free;
+    base->env.address = env_address;
+    base->env.submit = env_submit;
+    base->env.ctx = base;
+    return &base->lib;
+}
+
 static BPTR lib_expunge(REG(a6, struct PixmanLibBase *base));
-static ULONG lib_null(void);
 
-#define LOCK(b) ObtainSemaphore(&(b)->lock)
-#define UNLOCK(b) ReleaseSemaphore(&(b)->lock)
+static struct Library *lib_open(REG(a6, struct PixmanLibBase *base))
+{
+    base->lib.lib_OpenCnt++;
+    base->lib.lib_Flags &= ~LIBF_DELEXP;
+    if (!base->gpu) {
+        /* stream v1.4: its CPU back end answers COMPOSITE_PD */
+        struct Library *g = OpenLibrary((CONST_STRPTR)OPENGPU_NAME, OPENGPU_VERSION);
+        if (g) {
+            base->gpu = g;
+            if (OGPU_ANSWER(OGPU_Query(OGPU_OP_COMPOSITE_PD, OGPU_FMT_ARGB32)) == OGPU_NONE) {
+                base->gpu = NULL;
+                CloseLibrary(g);
+            }
+        }
+        if (!base->gpu) { base->lib.lib_OpenCnt--; return NULL; }
+    }
+    return &base->lib;
+}
 
-static ULONG PX_Version(REG(a6, struct PixmanLibBase *base));
-static CONST_STRPTR PX_VersionString(REG(a6, struct PixmanLibBase *base));
-static pixman_image_t *PX_ImageCreateBits(REG(a0, struct PXCreateBits *r), REG(a6, struct PixmanLibBase *base));
-static pixman_image_t *PX_ImageCreateSolid(REG(a0, const pixman_color_t *c), REG(a6, struct PixmanLibBase *base));
-static pixman_image_t *PX_ImageRef(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base));
-static BOOL PX_ImageUnref(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base));
-static BOOL PX_ImageSetTransform(REG(a0, pixman_image_t *image), REG(a1, const pixman_transform_t *t), REG(a6, struct PixmanLibBase *base));
-static void PX_ImageSetRepeat(REG(a0, pixman_image_t *image), REG(d0, ULONG repeat), REG(a6, struct PixmanLibBase *base));
-static BOOL PX_ImageSetFilter(REG(a0, struct PXFilter *r), REG(a6, struct PixmanLibBase *base));
-static void PX_ImageSetComponentAlpha(REG(a0, pixman_image_t *image), REG(d0, ULONG value), REG(a6, struct PixmanLibBase *base));
-static uint32_t *PX_ImageGetData(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base));
-static LONG PX_ImageGetWidth(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base));
-static LONG PX_ImageGetHeight(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base));
-static LONG PX_ImageGetStride(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base));
-static ULONG PX_ImageGetFormat(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base));
-static void PX_Composite32(REG(a0, struct PXComposite32 *r), REG(a6, struct PixmanLibBase *base));
-static BOOL PX_Fill(REG(a0, struct PXFill *r), REG(a6, struct PixmanLibBase *base));
-static BOOL PX_Blt(REG(a0, struct PXBlt *r), REG(a6, struct PixmanLibBase *base));
-static BOOL PX_ImageFillRectangles(REG(a0, struct PXFillRects *r), REG(a6, struct PixmanLibBase *base));
-static void PX_Region32Init(REG(a0, pixman_region32_t *r), REG(a6, struct PixmanLibBase *base));
+static BPTR lib_close(REG(a6, struct PixmanLibBase *base))
+{
+    base->lib.lib_OpenCnt--;
+    if (base->lib.lib_OpenCnt == 0 && (base->lib.lib_Flags & LIBF_DELEXP))
+        return lib_expunge(base);
+    return 0;
+}
+
+static BPTR lib_expunge(REG(a6, struct PixmanLibBase *base))
+{
+    BPTR seglist;
+    if (base->lib.lib_OpenCnt) {
+        base->lib.lib_Flags |= LIBF_DELEXP;
+        return 0;
+    }
+    seglist = base->seglist;
+    Remove(&base->lib.lib_Node);
+    if (base->gpu) CloseLibrary(base->gpu);
+    FreeMem((UBYTE *)base - base->lib.lib_NegSize, base->lib.lib_NegSize + base->lib.lib_PosSize);
+    return seglist;
+}
+
+static ULONG lib_null(void) { return 0; }
+
+/* ---- Pixman's calls --------------------------------------------------------------- */
+
+#define E (&base->env)
+#define ST (&base->stats)
+
+static ULONG PX_Version(REG(a6, struct PixmanLibBase *base)) { (void)base; return 4604; }   /* the interface's: 0.46.4 */
+static CONST_STRPTR PX_VersionString(REG(a6, struct PixmanLibBase *base)) { (void)base; return (CONST_STRPTR)"0.46.4"; }
+
+static pixman_image_t *PX_ImageCreateBits(REG(a0, struct PXCreateBits *r), REG(a6, struct PixmanLibBase *base))
+{
+    if (!r) return NULL;
+    return px_image_create_bits(E, r->format, r->width, r->height, r->bits, r->rowstride_bytes);
+}
+
+static pixman_image_t *PX_ImageCreateSolid(REG(a0, const pixman_color_t *c), REG(a6, struct PixmanLibBase *base))
+{
+    return px_image_create_solid(E, c);
+}
+
+static pixman_image_t *PX_ImageRef(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base))
+{
+    pixman_image_t *out;
+    ObtainSemaphore(&base->lock); out = px_image_ref(image); ReleaseSemaphore(&base->lock);
+    return out;
+}
+
+static BOOL PX_ImageUnref(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base))
+{
+    int out;
+    ObtainSemaphore(&base->lock); out = px_image_unref(E, image); ReleaseSemaphore(&base->lock);
+    return out ? TRUE : FALSE;
+}
+
+static BOOL PX_ImageSetTransform(REG(a0, pixman_image_t *image), REG(a1, const pixman_transform_t *t), REG(a6, struct PixmanLibBase *base))
+{
+    (void)base;
+    return px_image_set_transform(image, t) ? TRUE : FALSE;
+}
+
+static void PX_ImageSetRepeat(REG(a0, pixman_image_t *image), REG(d0, ULONG repeat), REG(a6, struct PixmanLibBase *base))
+{
+    (void)base; px_image_set_repeat(image, (int)repeat);
+}
+
+static BOOL PX_ImageSetFilter(REG(a0, struct PXFilter *r), REG(a6, struct PixmanLibBase *base))
+{
+    (void)base;
+    if (!r) return FALSE;
+    return px_image_set_filter(r->image, (int)r->filter, r->params, (int)r->n_params) ? TRUE : FALSE;
+}
+
+static void PX_ImageSetComponentAlpha(REG(a0, pixman_image_t *image), REG(d0, ULONG value), REG(a6, struct PixmanLibBase *base))
+{
+    (void)base; px_image_set_component_alpha(image, value != 0);
+}
+
+static uint32_t *PX_ImageGetData(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base)) { (void)base; return px_image_get_data(image); }
+static LONG PX_ImageGetWidth(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base)) { (void)base; return px_image_get_width(image); }
+static LONG PX_ImageGetHeight(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base)) { (void)base; return px_image_get_height(image); }
+static LONG PX_ImageGetStride(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base)) { (void)base; return px_image_get_stride(image); }
+static ULONG PX_ImageGetFormat(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base)) { (void)base; return px_image_get_format(image); }
+
+static void PX_Composite32(REG(a0, struct PXComposite32 *r), REG(a6, struct PixmanLibBase *base))
+{
+    if (!r) return;
+    px_composite32(E, ST, (int)r->op, r->src, r->mask, r->dest, (int)r->src_x, (int)r->src_y,
+                   (int)r->mask_x, (int)r->mask_y, (int)r->dest_x, (int)r->dest_y, (int)r->width, (int)r->height);
+}
+
+static BOOL PX_Fill(REG(a0, struct PXFill *r), REG(a6, struct PixmanLibBase *base))
+{
+    if (!r) return FALSE;
+    return px_fill(E, ST, r->bits, (int)r->stride, (int)r->bpp, (int)r->x, (int)r->y,
+                   (int)r->width, (int)r->height, r->xor_value) ? TRUE : FALSE;
+}
+
+static BOOL PX_Blt(REG(a0, struct PXBlt *r), REG(a6, struct PixmanLibBase *base))
+{
+    if (!r) return FALSE;
+    return px_blt(E, ST, r->src_bits, r->dst_bits, (int)r->src_stride, (int)r->dst_stride,
+                  (int)r->src_bpp, (int)r->dst_bpp, (int)r->src_x, (int)r->src_y,
+                  (int)r->dest_x, (int)r->dest_y, (int)r->width, (int)r->height) ? TRUE : FALSE;
+}
+
+static BOOL PX_ImageFillRectangles(REG(a0, struct PXFillRects *r), REG(a6, struct PixmanLibBase *base))
+{
+    if (!r) return FALSE;
+    return px_fill_rectangles(E, ST, (int)r->op, r->image, r->color, (int)r->n_rects, r->rects) ? TRUE : FALSE;
+}
+
+static void PX_Region32Init(REG(a0, pixman_region32_t *r), REG(a6, struct PixmanLibBase *base)) { (void)base; if (r) px_region32_init(r); }
 static void PX_Region32InitRect(REG(a0, pixman_region32_t *r), REG(d0, LONG x), REG(d1, LONG y),
-                                REG(d2, ULONG w), REG(d3, ULONG h), REG(a6, struct PixmanLibBase *base));
-static void PX_Region32Fini(REG(a0, pixman_region32_t *r), REG(a6, struct PixmanLibBase *base));
-static BOOL PX_Region32Copy(REG(a0, pixman_region32_t *dst), REG(a1, const pixman_region32_t *src), REG(a6, struct PixmanLibBase *base));
+                                REG(d2, ULONG w), REG(d3, ULONG h), REG(a6, struct PixmanLibBase *base))
+{
+    (void)base; if (r) px_region32_init_rect(r, (int)x, (int)y, (unsigned)w, (unsigned)h);
+}
+static void PX_Region32Fini(REG(a0, pixman_region32_t *r), REG(a6, struct PixmanLibBase *base)) { if (r) px_region32_fini(E, r); }
+static BOOL PX_Region32Copy(REG(a0, pixman_region32_t *dst), REG(a1, const pixman_region32_t *src), REG(a6, struct PixmanLibBase *base))
+{
+    return dst && src && px_region32_copy(E, dst, src) ? TRUE : FALSE;
+}
 static BOOL PX_Region32Intersect(REG(a0, pixman_region32_t *dst), REG(a1, const pixman_region32_t *a),
-                                 REG(a2, const pixman_region32_t *b), REG(a6, struct PixmanLibBase *base));
+                                 REG(a2, const pixman_region32_t *b), REG(a6, struct PixmanLibBase *base))
+{
+    return dst && a && b && px_region32_intersect(E, dst, a, b) ? TRUE : FALSE;
+}
 static BOOL PX_Region32Union(REG(a0, pixman_region32_t *dst), REG(a1, const pixman_region32_t *a),
-                             REG(a2, const pixman_region32_t *b), REG(a6, struct PixmanLibBase *base));
+                             REG(a2, const pixman_region32_t *b), REG(a6, struct PixmanLibBase *base))
+{
+    return dst && a && b && px_region32_union(E, dst, a, b) ? TRUE : FALSE;
+}
+
+/* ---- the RomTag ------------------------------------------------------------------- */
 
 static const APTR lib_vectors[] = {
     (APTR)lib_open, (APTR)lib_close, (APTR)lib_expunge, (APTR)lib_null,
@@ -108,303 +273,3 @@ const struct Resident lib_romtag = {
     RTF_AUTOINIT, LIB_VERSION, NT_LIBRARY, 0,
     (char *)lib_name, (char *)lib_id, (APTR)&lib_inittable
 };
-
-static struct Library *lib_init(REG(d0, struct PixmanLibBase *base),
-                                REG(a0, BPTR seglist),
-                                REG(a6, struct ExecBase *sys))
-{
-    SysBase = sys;
-    base->seglist = seglist;
-    base->lib.lib_Revision = LIB_REVISION;
-    InitSemaphore(&base->lock);
-    return &base->lib;
-}
-
-static struct Library *lib_open(REG(a6, struct PixmanLibBase *base))
-{
-    base->lib.lib_OpenCnt++;
-    base->lib.lib_Flags &= ~LIBF_DELEXP;
-    return &base->lib;
-}
-
-static BPTR lib_close(REG(a6, struct PixmanLibBase *base))
-{
-    base->lib.lib_OpenCnt--;
-    if (base->lib.lib_OpenCnt == 0 && (base->lib.lib_Flags & LIBF_DELEXP))
-        return lib_expunge(base);
-    return 0;
-}
-
-static BPTR lib_expunge(REG(a6, struct PixmanLibBase *base))
-{
-    BPTR seglist;
-    if (base->lib.lib_OpenCnt) {
-        base->lib.lib_Flags |= LIBF_DELEXP;
-        return 0;
-    }
-    seglist = base->seglist;
-    Remove(&base->lib.lib_Node);
-    FreeMem((UBYTE *)base - base->lib.lib_NegSize,
-            base->lib.lib_NegSize + base->lib.lib_PosSize);
-    return seglist;
-}
-
-static ULONG lib_null(void) { return 0; }
-
-static ULONG PX_Version(REG(a6, struct PixmanLibBase *base))
-{
-    (void)base;
-    return (ULONG)pixman_version();
-}
-
-static CONST_STRPTR PX_VersionString(REG(a6, struct PixmanLibBase *base))
-{
-    (void)base;
-    return (CONST_STRPTR)pixman_version_string();
-}
-
-static pixman_image_t *PX_ImageCreateBits(REG(a0, struct PXCreateBits *r), REG(a6, struct PixmanLibBase *base))
-{
-    pixman_image_t *out = NULL;
-    if (!r) return NULL;
-    LOCK(base);
-    out = pixman_image_create_bits(r->format, r->width, r->height, r->bits, r->rowstride_bytes);
-    UNLOCK(base);
-    return out;
-}
-
-static pixman_image_t *PX_ImageCreateSolid(REG(a0, const pixman_color_t *c), REG(a6, struct PixmanLibBase *base))
-{
-    pixman_image_t *out = NULL;
-    if (!c) return NULL;
-    LOCK(base);
-    out = pixman_image_create_solid_fill(c);
-    UNLOCK(base);
-    return out;
-}
-
-static pixman_image_t *PX_ImageRef(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base))
-{
-    pixman_image_t *out;
-    if (!image) return NULL;
-    LOCK(base); out = pixman_image_ref(image); UNLOCK(base);
-    return out;
-}
-
-static BOOL PX_ImageUnref(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base))
-{
-    pixman_bool_t out;
-    if (!image) return FALSE;
-    LOCK(base); out = pixman_image_unref(image); UNLOCK(base);
-    return out ? TRUE : FALSE;
-}
-
-static BOOL PX_ImageSetTransform(REG(a0, pixman_image_t *image), REG(a1, const pixman_transform_t *t), REG(a6, struct PixmanLibBase *base))
-{
-    pixman_bool_t out;
-    if (!image) return FALSE;
-    LOCK(base); out = pixman_image_set_transform(image, t); UNLOCK(base);
-    return out ? TRUE : FALSE;
-}
-
-static void PX_ImageSetRepeat(REG(a0, pixman_image_t *image), REG(d0, ULONG repeat), REG(a6, struct PixmanLibBase *base))
-{
-    if (!image) return;
-    LOCK(base); pixman_image_set_repeat(image, (pixman_repeat_t)repeat); UNLOCK(base);
-}
-
-static BOOL PX_ImageSetFilter(REG(a0, struct PXFilter *r), REG(a6, struct PixmanLibBase *base))
-{
-    pixman_bool_t out;
-    if (!r || !r->image) return FALSE;
-    LOCK(base);
-    out = pixman_image_set_filter(r->image, r->filter, r->params, r->n_params);
-    UNLOCK(base);
-    return out ? TRUE : FALSE;
-}
-
-static void PX_ImageSetComponentAlpha(REG(a0, pixman_image_t *image), REG(d0, ULONG value), REG(a6, struct PixmanLibBase *base))
-{
-    if (!image) return;
-    LOCK(base); pixman_image_set_component_alpha(image, value ? 1 : 0); UNLOCK(base);
-}
-
-static uint32_t *PX_ImageGetData(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base))
-{
-    uint32_t *out;
-    if (!image) return NULL;
-    LOCK(base); out = pixman_image_get_data(image); UNLOCK(base);
-    return out;
-}
-
-static LONG PX_ImageGetWidth(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base))
-{
-    LONG out;
-    if (!image) return 0;
-    LOCK(base); out = pixman_image_get_width(image); UNLOCK(base);
-    return out;
-}
-
-static LONG PX_ImageGetHeight(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base))
-{
-    LONG out;
-    if (!image) return 0;
-    LOCK(base); out = pixman_image_get_height(image); UNLOCK(base);
-    return out;
-}
-
-static LONG PX_ImageGetStride(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base))
-{
-    LONG out;
-    if (!image) return 0;
-    LOCK(base); out = pixman_image_get_stride(image); UNLOCK(base);
-    return out;
-}
-
-static ULONG PX_ImageGetFormat(REG(a0, pixman_image_t *image), REG(a6, struct PixmanLibBase *base))
-{
-    ULONG out;
-    if (!image) return 0;
-    LOCK(base); out = (ULONG)pixman_image_get_format(image); UNLOCK(base);
-    return out;
-}
-
-static void PX_Composite32(REG(a0, struct PXComposite32 *r), REG(a6, struct PixmanLibBase *base))
-{
-    if (!r || !r->src || !r->dest || r->width <= 0 || r->height <= 0) return;
-    LOCK(base);
-    pixman_image_composite32(r->op, r->src, r->mask, r->dest,
-        r->src_x, r->src_y, r->mask_x, r->mask_y,
-        r->dest_x, r->dest_y, r->width, r->height);
-    UNLOCK(base);
-}
-
-static BOOL PX_Fill(REG(a0, struct PXFill *r), REG(a6, struct PixmanLibBase *base))
-{
-    pixman_bool_t out;
-    if (!r || !r->bits) return FALSE;
-    LOCK(base);
-    out = pixman_fill(r->bits, r->stride, r->bpp, r->x, r->y,
-                      r->width, r->height, r->xor_value);
-    UNLOCK(base);
-    return out ? TRUE : FALSE;
-}
-
-static void px_copy_overlap(UBYTE *dst, const UBYTE *src, ULONG n)
-{
-#ifdef PX_AC_HELPERS
-    ac_memmove_auto(dst, src, n);    /* a row: AC090's native memmove from 64 bytes, the 68040 C body elsewhere (SPD-20) */
-#else
-    ULONG i;
-    if (dst > src && dst < src + n) {
-        for (i = n; i != 0; --i) dst[i - 1] = src[i - 1];
-    } else {
-        for (i = 0; i < n; ++i) dst[i] = src[i];
-    }
-#endif
-}
-
-static BOOL px_blt_portable(struct PXBlt *r)
-{
-    LONG row, first, last, step;
-    ULONG bytespp, rowbytes;
-    UBYTE *src_base, *dst_base, *src, *dst;
-
-    if (r->src_bpp != r->dst_bpp || r->width <= 0 || r->height <= 0 ||
-        r->src_stride <= 0 || r->dst_stride <= 0 ||
-        r->src_x < 0 || r->src_y < 0 || r->dest_x < 0 || r->dest_y < 0)
-        return FALSE;
-
-    if (r->src_bpp != 8 && r->src_bpp != 16 &&
-        r->src_bpp != 24 && r->src_bpp != 32)
-        return FALSE;
-
-    bytespp = (ULONG)r->src_bpp >> 3;
-    rowbytes = (ULONG)r->width * bytespp;
-    src_base = (UBYTE *)r->src_bits;
-    dst_base = (UBYTE *)r->dst_bits;
-
-    if (r->src_bits == r->dst_bits && r->dest_y > r->src_y) {
-        first = r->height - 1; last = -1; step = -1;
-    } else {
-        first = 0; last = r->height; step = 1;
-    }
-
-    for (row = first; row != last; row += step) {
-        src = src_base + ((ULONG)(r->src_y + row) * (ULONG)r->src_stride * 4UL)
-                       + (ULONG)r->src_x * bytespp;
-        dst = dst_base + ((ULONG)(r->dest_y + row) * (ULONG)r->dst_stride * 4UL)
-                       + (ULONG)r->dest_x * bytespp;
-        px_copy_overlap(dst, src, rowbytes);
-    }
-    return TRUE;
-}
-
-static BOOL PX_Blt(REG(a0, struct PXBlt *r), REG(a6, struct PixmanLibBase *base))
-{
-    pixman_bool_t out;
-    if (!r || !r->src_bits || !r->dst_bits) return FALSE;
-    LOCK(base);
-    out = pixman_blt(r->src_bits, r->dst_bits,
-        r->src_stride, r->dst_stride, r->src_bpp, r->dst_bpp,
-        r->src_x, r->src_y, r->dest_x, r->dest_y, r->width, r->height);
-    if (!out)
-        out = px_blt_portable(r);
-    UNLOCK(base);
-    return out ? TRUE : FALSE;
-}
-
-static BOOL PX_ImageFillRectangles(REG(a0, struct PXFillRects *r), REG(a6, struct PixmanLibBase *base))
-{
-    pixman_bool_t out;
-    if (!r || !r->image || !r->color || r->n_rects <= 0 || !r->rects) return FALSE;
-    LOCK(base);
-    out = pixman_image_fill_rectangles(r->op, r->image, r->color, r->n_rects, r->rects);
-    UNLOCK(base);
-    return out ? TRUE : FALSE;
-}
-
-static void PX_Region32Init(REG(a0, pixman_region32_t *r), REG(a6, struct PixmanLibBase *base))
-{
-    if (!r) return;
-    LOCK(base); pixman_region32_init(r); UNLOCK(base);
-}
-
-static void PX_Region32InitRect(REG(a0, pixman_region32_t *r), REG(d0, LONG x), REG(d1, LONG y),
-                                REG(d2, ULONG w), REG(d3, ULONG h), REG(a6, struct PixmanLibBase *base))
-{
-    if (!r) return;
-    LOCK(base); pixman_region32_init_rect(r, x, y, w, h); UNLOCK(base);
-}
-
-static void PX_Region32Fini(REG(a0, pixman_region32_t *r), REG(a6, struct PixmanLibBase *base))
-{
-    if (!r) return;
-    LOCK(base); pixman_region32_fini(r); UNLOCK(base);
-}
-
-static BOOL PX_Region32Copy(REG(a0, pixman_region32_t *dst), REG(a1, const pixman_region32_t *src), REG(a6, struct PixmanLibBase *base))
-{
-    pixman_bool_t out;
-    if (!dst || !src) return FALSE;
-    LOCK(base); out = pixman_region32_copy(dst, src); UNLOCK(base);
-    return out ? TRUE : FALSE;
-}
-
-static BOOL PX_Region32Intersect(REG(a0, pixman_region32_t *dst), REG(a1, const pixman_region32_t *a),
-                                 REG(a2, const pixman_region32_t *b), REG(a6, struct PixmanLibBase *base))
-{
-    pixman_bool_t out;
-    if (!dst || !a || !b) return FALSE;
-    LOCK(base); out = pixman_region32_intersect(dst, a, b); UNLOCK(base);
-    return out ? TRUE : FALSE;
-}
-
-static BOOL PX_Region32Union(REG(a0, pixman_region32_t *dst), REG(a1, const pixman_region32_t *a),
-                             REG(a2, const pixman_region32_t *b), REG(a6, struct PixmanLibBase *base))
-{
-    pixman_bool_t out;
-    if (!dst || !a || !b) return FALSE;
-    LOCK(base); out = pixman_region32_union(dst, a, b); UNLOCK(base);
-    return out ? TRUE : FALSE;
-}
