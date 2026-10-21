@@ -26,7 +26,7 @@ A run is valid only when it ends with `HARNESS PASS`. Correctness failure return
 
 ## Build
 
-Run `./build.sh`. By default it uses the frozen first-build snapshot at `/home/da1ek/openamigapixman-buildcheck`. Set `PIXMAN_ROOT` to qualify another candidate without changing the harness.
+Run `./build.sh`. By default it uses the frozen first-build snapshot at `~/openamigapixman-buildcheck`. Set `PIXMAN_ROOT` to qualify another candidate without changing the harness.
 
 ## Benchmark Method
 
